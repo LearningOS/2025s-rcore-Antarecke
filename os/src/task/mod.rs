@@ -24,7 +24,7 @@ pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
 
-/// [INFO] ch3
+/// [INFO] ch4
 use alloc::collections::BTreeMap;
 
 /// The task manager, where all the tasks are managed.
@@ -49,7 +49,9 @@ struct TaskManagerInner {
     tasks: Vec<TaskControlBlock>,
     /// id of current `Running` task
     current_task: usize,
-    /// [INFO] ch3
+    /// [INFO] ch4
+    /// task id 就是 tasks 的索引值；current_task 就是当前任务的 task id；
+    /// 因为 task 退出流程不改动 tasks 顺序 (只改状态)，所以 TCB 外部的 syscall_recorder 不会错位。
     syscall_recorder: BTreeMap<usize, BTreeMap<usize, usize>>,
 }
 
@@ -69,7 +71,7 @@ lazy_static! {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
                     current_task: 0,
-                    // [INFO] ch3
+                    // [INFO] ch4
                     syscall_recorder: BTreeMap::new(),
                 })
             },
@@ -161,7 +163,7 @@ impl TaskManager {
         }
     }
 
-    /// [INFO] ch3
+    /// [INFO] ch4
     fn get_current_syscall_count(&self, syscall_id: usize) -> isize {
         let mut inner = self.inner.exclusive_access();
         let current_task: usize = inner.current_task;
@@ -171,7 +173,7 @@ impl TaskManager {
         *current_counters.entry(syscall_id).or_insert(0) as isize
     }
 
-    /// [INFO] ch3
+    /// [INFO] ch4
     fn record_syscall(&self, syscall_id: usize) {
         let mut inner = self.inner.exclusive_access();
         let current_task: usize = inner.current_task;
@@ -230,12 +232,12 @@ pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
 }
 
-/// [INFO] ch3
+/// [INFO] ch4
 pub fn get_current_syscall_count(syscall_id: usize) -> isize {
     TASK_MANAGER.get_current_syscall_count(syscall_id)
 }
 
-/// [INFO] ch3
+/// [INFO] ch4
 pub fn record_syscall(syscall_id: usize) {
     TASK_MANAGER.record_syscall(syscall_id);
 }
