@@ -81,9 +81,19 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
     trace!("kernel: sys_trace");
-    // -1
+
     let token = current_user_token();
+    let addr = _id;
+    if !(check_sv39_valid(addr)) {
+        return -1;  // 非法地址
+        /*
+            这是针对 ch4 测例 ch4_trace1.rs 中期望 isize::MAX as usize as *const _ 为 None 的修改。
+            原来的实现 (From<usize> for VirtAddr) 未对 usize 做 SV39 要求的高位的格式的检查,
+            可能会转换出非法地址。
+        */
+    }
     match _trace_request {
+        // read
         0 => {
             if let Some(byte_ref) = translated_byte_ref_u8(token, _id as *mut u8, false) {
                 *byte_ref as isize
@@ -91,6 +101,7 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
                 -1
             }
         }
+        // write
         1 => {
             if let Some(byte_ref) = translated_byte_ref_u8(token, _id as *mut u8, true) {
                 *byte_ref = _data as u8;
@@ -99,6 +110,7 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
                 -1
             }
         }
+        // count
         2 => {
             get_current_syscall_count(_id)
         }
@@ -128,4 +140,16 @@ pub fn sys_sbrk(size: i32) -> isize {
     } else {
         -1
     }
+}
+
+pub fn check_sv39_valid(addr: usize) -> bool {
+    const VA_WIDTH: usize = 39;
+    let bit38 = (addr >> (VA_WIDTH - 1)) & 1;
+    let high = addr >> VA_WIDTH;
+    let expected_high = if bit38 == 1 {
+        (1 << (64 - VA_WIDTH)) - 1
+    } else {
+        0
+    };
+    high == expected_high
 }

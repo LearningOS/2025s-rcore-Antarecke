@@ -388,14 +388,23 @@ impl MemorySet {
     /// 取消一段虚拟地址的映射。和 mmap 的逆过程不同，munmap 的粒度不是 MapArea 而是 VPN (因为虚拟区间内可能存在
     /// 未被映射过的页面)
     pub fn munmap(&mut self, start: VirtAddr, len: usize) -> isize {
+        if !start.aligned() {   // 需要检查页对齐
+            return -1;
+        }
         let end: VirtAddr = (usize::from(start) + len - 1).into();
         let start_vpn = start.floor();
-        let mut end_vpn = end.floor();
-        end_vpn.step();     // 切分时从 end.floor() 右侧切; 和 vpn_range 有边界比较
+        let end_vpn = end.floor();
+        // 切分边界使每个 MapArea 对齐到 page boundary（方便后续 whole-area 删除）
         self.split_framed_area(start_vpn);
-        self.split_framed_area(end_vpn);
+        let mut end_outer_vpn = end_vpn;
+        end_outer_vpn.step();
+        self.split_framed_area(end_outer_vpn);
 
-        if self.get_mapped_pages(start_vpn, end_vpn).len() <= end_vpn.0 - start_vpn.0 {
+        // 由题，当出现未映射页号时出错
+        // 本函数有能力越过未映射部分对区间内合法页号进行删除
+        let total_pages = end_vpn.0 - start_vpn.0 + 1;
+        let mapped_pages = self.get_mapped_pages(start_vpn, end_vpn).len();
+        if mapped_pages != total_pages {
             return -1;
         }
 
@@ -406,29 +415,19 @@ impl MemorySet {
         //             && area.vpn_range.get_end() <= end_vpn {
         //             area.unmap(&mut self.page_table);
         //             // todo)) 释放 self.areas 内的此 area
-        //             // 不会写了，原来这不是 python，要用索引删除 😟
+        //             // 不会写了，原来这不是 python，要用索引删除元素 😟
         //         }
         //     }
         // }
-        // self.areas.retain(|area: &mut MapArea| {
-        //     if area.map_type == MapType::Framed
-        //         && start_vpn <= area.vpn_range.get_start()
-        //         && area.vpn_range.get_end() <= end_vpn
-        //     {
-        //         // 先解除映射
-        //         area.unmap(&mut self.page_table);
-        //         false // 删除该 area
-        //     } else {
-        //         true // 保留
-        //     }
-        // });
+
+        // 重新做一个 areas
         self.areas = self
             .areas
             .drain(..) // 等价于 into_iter()，但不会分配新 Vec，更高效
             .filter_map(|mut area| {
                 if area.map_type == MapType::Framed
                     && start_vpn <= area.vpn_range.get_start()
-                    && area.vpn_range.get_end() <= end_vpn
+                    && area.vpn_range.get_end() <= end_outer_vpn
                 {
                     // 在删除前执行清理逻辑
                     area.unmap(&mut self.page_table);
@@ -438,11 +437,13 @@ impl MemorySet {
                 }
             })
             .collect();
+
+        // 另一种写法：两次遍历
         // 先对所有需要删除的调用 unmap
         // for area in self.areas.iter_mut() {
         //     if area.map_type == MapType::Framed
         //         && start_vpn <= area.vpn_range.get_start()
-        //         && area.vpn_range.get_end() <= end_vpn
+        //         && area.vpn_range.get_end() <= end_outer_vpn
         //     {
         //         area.unmap(&mut self.page_table);
         //     }
@@ -452,7 +453,7 @@ impl MemorySet {
         // self.areas.retain(|area| {
         //     !(area.map_type == MapType::Framed
         //         && start_vpn <= area.vpn_range.get_start()
-        //         && area.vpn_range.get_end() <= end_vpn)
+        //         && area.vpn_range.get_end() <= end_outer_vpn)
         // });
 
         0
