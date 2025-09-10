@@ -4,9 +4,15 @@ use crate::task::{
     exit_current_and_run_next,
     suspend_current_and_run_next,
     current_user_token,
-    get_current_syscall_count
+    // [INFO] ch4
+    get_current_syscall_count,
+    // [INFO] ch4
+    mmap,
+    // [INFO] ch4
+    munmap,
 };
 use crate::timer::get_time_us;
+// [INFO] ch4
 use crate::mm::{translated_byte_buffer, translated_byte_ref_u8};
 
 #[repr(C)]
@@ -103,13 +109,16 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
     trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
-    -1
+    // -1
+    // 返回 isize 状态码
+    mmap(_start.into(), _len, _port)
 }
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(_start: usize, _len: usize) -> isize {
     trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
-    -1
+    // -1
+    munmap(_start.into(), _len)
 }
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {
